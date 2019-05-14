@@ -1,0 +1,9 @@
+[package]
+name = "graphbash"
+version = "0.1.0"
+authors = ["Nitrofski <vincent.fortin.94@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+petgraph = "0.4.13"
+bitflags = "1.0.4"
