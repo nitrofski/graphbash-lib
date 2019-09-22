@@ -11,34 +11,72 @@ mod utils;
 use utils::ItWithFallback;
 
 bitflags! {
-    pub struct Directions : u8 {
-        const UP = 0x01;
-        const RIGHT = 0x02;
-        const DOWN = 0x04;
-        const LEFT = 0x08;
-        const UP_RIGHT = 0x10;
-        const DOWN_RIGHT = 0x20;
-        const DOWN_LEFT = 0x40;
-        const UP_LEFT = 0x80;
+    pub struct Directions : u16 {
+        const UP = 0x0001;
+        const LEFT = 0x0002;
+        const RIGHT = 0x0004;
+        const DOWN = 0x0008;
 
-        const NONE = 0x00;
-        const ALL_STRAIGHTS = Self::UP.bits | Self::RIGHT.bits | Self::DOWN.bits | Self::LEFT.bits;
-        const ALL_DIAGONALS = !Self::ALL_STRAIGHTS.bits;
-        const ALL = 0xFF;
+        const UP_LEFT = 0x0010;
+        const UP_RIGHT = 0x0020;
+        const DOWN_LEFT = 0x0040;
+        const DOWN_RIGHT = 0x0080;
+
+        const UP_DOWN = 0x0100;
+        const LEFT_RIGHT = 0x0200;
+        const UP_LEFT_RIGHT = 0x0400;
+        const UP_LEFT_DOWN = 0x0800;
+        const UP_RIGHT_DOWN = 0x1000;
+        const LEFT_RIGHT_DOWN = 0x2000;
+
+        const ALL_AT_ONCE = 0x4000;
+
+        const ANY_STRAIGHT = Directions::UP.bits | Directions::LEFT.bits
+                           | Directions::RIGHT.bits | Directions::DOWN.bits;
+        const ANY_DIAGONAL = Directions::UP_LEFT.bits | Directions::UP_RIGHT.bits
+                           | Directions::DOWN_LEFT.bits | Directions::DOWN_RIGHT.bits;
+        const ANY_REAL_TIME_IMPOSSIBLE = Directions::UP_DOWN.bits
+                                       | Directions::LEFT_RIGHT.bits
+                                       | Directions::UP_LEFT_RIGHT.bits
+                                       | Directions::UP_LEFT_DOWN.bits
+                                       | Directions::UP_RIGHT_DOWN.bits
+                                       | Directions::LEFT_RIGHT_DOWN.bits
+                                       | Directions::ALL_AT_ONCE.bits;
     }
+}
+
+impl Directions {
+    fn has_straight(&self) -> bool {
+        self.intersects(Directions::ANY_STRAIGHT)
+    }
+
+    fn has_diagonal(&self) -> bool {
+        self.intersects(Directions::ANY_DIAGONAL)
+    }
+
+    // fn has_real_time_impossible(&self) -> bool {
+    //     self.intersects(Directions::ANY_REAL_TIME_IMPOSSIBLE)
+    // }
 }
 
 impl std::fmt::Display for Directions {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let pairs = [
             (Directions::UP, "U"),
+            (Directions::LEFT, "L"),
             (Directions::RIGHT, "R"),
             (Directions::DOWN, "D"),
-            (Directions::LEFT, "L"),
-            (Directions::UP_RIGHT, "UR"),
-            (Directions::DOWN_RIGHT, "DR"),
-            (Directions::DOWN_LEFT, "DL"),
             (Directions::UP_LEFT, "UL"),
+            (Directions::UP_RIGHT, "UR"),
+            (Directions::DOWN_LEFT, "DL"),
+            (Directions::DOWN_RIGHT, "DR"),
+            (Directions::UP_DOWN, "UD"),
+            (Directions::LEFT_RIGHT, "LR"),
+            (Directions::UP_LEFT_RIGHT, "ULR"),
+            (Directions::UP_LEFT_DOWN, "ULD"),
+            (Directions::UP_RIGHT_DOWN, "URD"),
+            (Directions::LEFT_RIGHT_DOWN, "LRD"),
+            (Directions::ALL_AT_ONCE, "ALL"),
         ];
 
         write!(
@@ -48,7 +86,10 @@ impl std::fmt::Display for Directions {
                 .iter()
                 .take(4)
                 .filter(|t| self.contains(t.0))
-                .or(pairs.iter().skip(4).filter(|t| self.contains(t.0)))
+                .or(pairs.iter().skip(4).take(4).filter(|t| self.contains(t.0)))
+                .or(pairs.iter().skip(8).take(2).filter(|t| self.contains(t.0)))
+                .or(pairs.iter().skip(10).take(4).filter(|t| self.contains(t.0)))
+                .or(pairs.iter().skip(14).filter(|t| self.contains(t.0)))
                 .map(|t| t.1)
                 .collect::<Vec<&str>>()
                 .join("|")
@@ -66,14 +107,14 @@ pub fn generate(
     let mut graph = graphmap::DiGraphMap::<i32, Directions>::new();
 
     struct NodeDepth {
-        panel_index: i32,
+        panel_idx: i32,
         depth: i32,
     }
 
     let mut queue = VecDeque::<NodeDepth>::new();
 
     queue.push_back(NodeDepth {
-        panel_index: graph.add_node(0),
+        panel_idx: graph.add_node(0),
         depth: max_depth,
     });
 
@@ -84,11 +125,10 @@ pub fn generate(
     // When composing multiple directions, the game simply adds the current index's horizontal and
     // vertical behaviors for the current panel index. This is what causes the menu OoB.
 
-    while let Some(node_depth) = queue.pop_front() {
+    while let Some(cur_node) = queue.pop_front() {
         ram_dump.seek(io::SeekFrom::Start(
             (RAM_MOVE_BEHAVIOUR_ROOT_ADDRESS
-                + node_depth.panel_index as i64 * RAM_MOVE_BEHAVIOUR_INDEX_OFFSET)
-                as u64,
+                + cur_node.panel_idx as i64 * RAM_MOVE_BEHAVIOUR_INDEX_OFFSET) as u64,
         ))?;
 
         let mut bytes = [0u8; 4];
@@ -99,45 +139,52 @@ pub fn generate(
         let u = bytes[2] as i8 as i32;
         let d = bytes[3] as i8 as i32;
 
-        let mut add_node_and_edge = |directions: Directions, to_panel_index: i32| {
-            if !graph.contains_node(to_panel_index) {
-                graph.add_node(to_panel_index);
-                if node_depth.depth > 0 {
+        let mut add_node_edge = |directions: Directions, to_panel_idx: i32| {
+            if !graph.contains_node(to_panel_idx) {
+                graph.add_node(to_panel_idx);
+                if cur_node.depth > 0 {
                     queue.push_back(NodeDepth {
-                        panel_index: to_panel_index,
-                        depth: node_depth.depth - 1,
+                        panel_idx: to_panel_idx,
+                        depth: cur_node.depth - 1,
                     });
                 }
             }
 
-            if let Some(edge_direction) =
-                graph.edge_weight_mut(node_depth.panel_index, to_panel_index)
-            {
+            if let Some(edge_direction) = graph.edge_weight_mut(cur_node.panel_idx, to_panel_idx) {
                 *edge_direction |= directions;
             } else {
-                graph.add_edge(node_depth.panel_index, to_panel_index, directions.into());
+                graph.add_edge(cur_node.panel_idx, to_panel_idx, directions.into());
             }
         };
 
-        add_node_and_edge(Directions::UP, node_depth.panel_index + u);
-        add_node_and_edge(Directions::RIGHT, node_depth.panel_index + r);
-        add_node_and_edge(Directions::DOWN, node_depth.panel_index + d);
-        add_node_and_edge(Directions::LEFT, node_depth.panel_index + l);
-        add_node_and_edge(Directions::UP_RIGHT, node_depth.panel_index + u + r);
-        add_node_and_edge(Directions::DOWN_RIGHT, node_depth.panel_index + d + r);
-        add_node_and_edge(Directions::DOWN_LEFT, node_depth.panel_index + d + l);
-        add_node_and_edge(Directions::UP_LEFT, node_depth.panel_index + u + l);
+        add_node_edge(Directions::UP, cur_node.panel_idx + u);
+        add_node_edge(Directions::LEFT, cur_node.panel_idx + l);
+        add_node_edge(Directions::RIGHT, cur_node.panel_idx + r);
+        add_node_edge(Directions::DOWN, cur_node.panel_idx + d);
+
+        add_node_edge(Directions::UP_LEFT, cur_node.panel_idx + u + l);
+        add_node_edge(Directions::UP_RIGHT, cur_node.panel_idx + u + r);
+        add_node_edge(Directions::DOWN_LEFT, cur_node.panel_idx + d + l);
+        add_node_edge(Directions::DOWN_RIGHT, cur_node.panel_idx + d + r);
+
+        add_node_edge(Directions::UP_DOWN, cur_node.panel_idx + u + d);
+        add_node_edge(Directions::LEFT_RIGHT, cur_node.panel_idx + l + r);
+        add_node_edge(Directions::UP_LEFT_RIGHT, cur_node.panel_idx + u + l + r);
+        add_node_edge(Directions::UP_LEFT_DOWN, cur_node.panel_idx + u + l + d);
+        add_node_edge(Directions::UP_RIGHT_DOWN, cur_node.panel_idx + u + r + d);
+        add_node_edge(Directions::LEFT_RIGHT_DOWN, cur_node.panel_idx + l + r + d);
+        add_node_edge(Directions::ALL_AT_ONCE, cur_node.panel_idx + u + l + r + d);
 
         // Debug
         #[cfg(debug_assertions)]
         {
             let node_edges = graph
-                .edges(node_depth.panel_index)
+                .edges(cur_node.panel_idx)
                 .collect::<Vec<(i32, i32, &Directions)>>();
             println!(
                 "({:2}) Added node {:5} with edges: {:?}",
-                max_depth - node_depth.depth,
-                node_depth.panel_index,
+                max_depth - cur_node.depth,
+                cur_node.panel_idx,
                 node_edges
                     .iter()
                     .map(|e| { format!("{}:{}", e.2, e.1) })
@@ -165,15 +212,32 @@ pub fn get_shortest_path(
         },
         /*edge_cost:*/
         |e| {
-            if e.2.intersects(Directions::ALL_STRAIGHTS) {
-                1
+            if e.1 == -1025
+                || e.1 == -1317
+                || e.1 == -1353
+                || e.1 == -1381
+                || e.1 == -1383
+                || e.1 == -1400
+                || e.1 == -1409
+                || e.1 == -1424
+            {
+                return std::f32::INFINITY;
+            }
+
+            // Because diagonals are risky to input RTA in game, we'll give them a bigger cost.
+            // Also, because other directioans are impossible RTA, they have infinite weight.
+            // This should probably be configurable.
+            if e.2.has_straight() {
+                1.0
+            } else if e.2.has_diagonal() {
+                1.1
             } else {
-                3
+                1.2
             }
         },
         /*estimate_cost:*/
         |i| {
-            // Every straight direction can move at most 128 indices toward the desired index. We
+            // Every straight direction can move at most 128 units toward the desired index. We
             // can use that as a heuristic, as that gives us a mean to quickly calculate the minimum
             // number of steps to get to the desired index.
             // Note: Because of how diagonal composition works, this is only valid if a diagonal
@@ -181,7 +245,7 @@ pub fn get_shortest_path(
             //       this estimate should be halved (e.g. for TAS). An underestimate won't affect
             //       the result, only the performance.
             let estimate = (to_node - i).abs() / 128 + 1;
-            estimate
+            estimate as f32 / 4.0
         },
     )?;
 

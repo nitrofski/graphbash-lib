@@ -7,12 +7,12 @@ ommited when refering to addresses.
 Notable values:
 - Index of A: `0`
 - Index of CANCEL: `29`
-- Address of current index value: `0xBF19C`
+- Address of current index value: `0x0BF19C`
 - Address offset per index unit: `168 bytes`
-- Address of index 0: `0xBDB58`
+- Address of index 0: `0x0BDB58`
 
 ## Analysing the RAM for a single item
-Here is the dumped RAM for the object at index 0 (address `0xBDB58`):
+Here is the dumped RAM for the object at index 0 (address `0x0BDB58`):
 ```
 Offset | 0        4        8        C
   0x00 | 10008000 00000000 00000000 00000000
@@ -86,8 +86,9 @@ values succesfully changed the behavior of moving the cursor from the A item.
 Starting at address `0x0BD5D0`, we have a series of values which seem to control exactly what
 happens for each action and each selection. There is apparently 16 bytes associated to each index.
 These are distributed as such:
-- 4 bytes that do who knows what (positional stuff, probably...)
-- 4 bytes that tell which string to write down in the field up there (remember, we're actually
+- 2 bytes for the X position of the item (read on load)
+- 2 bytes for tye Y position of the item (read on load)
+- 4 bytes pointing to a string to write down in the field up there (remember, we're actually
   supposed to write a savefile name here)
 - **4 bytes that control the horizontal movement**
 - **4 bytes that control the vertical movement**
@@ -112,6 +113,14 @@ I still need to investigate exactly how they will be affected, but I am confiden
 important to take this fact into account when creating the graph that will eventually represent all
 of Bash's Memory Manipulation possibilities.
 
+# Known effects
+
+| Index | Address    | Good/Bad | Effect                                                                 | Notes                                     |
+| ----- | ---------- | -------- | ---------------------------------------------------------------------- | ----------------------------------------- |
+| -63   | `0x0BB270` |          | Name selection screen crashes on load.                                 | Temporary &mdash; Recovers on hub reload. |
+| -72   | `0x0BAC94` | Bad      | Navigating Left in name seletion screen stops functioning as expected. | Temporary &mdash; Recovers on hub reload. |
+
+
 # Log from 2016/07/26 (<http://pastebin.com/kewAgjvH>)
 Crash bash Memory Manipulation
 ------------------------------
@@ -124,7 +133,7 @@ pressing Down-left on V, which takes you to ID 34. Great. Now from there you can
 
 - Press DOWN: Nothing happens...
 - Press LEFT: You move to 45, then you're stuck.
-- Press RIGHT: You move to 48, then you're stuck.
+- Press UP: You move to 48, then you're stuck.
 - Press UP-LEFT: You move to 59, from here only pressing UP does something, and it brings you on H.
 - Press RIGHT: Here is where all the magic happens. It brings you to -94.
 

@@ -38,20 +38,27 @@ fn main() {
         println!("No path found.");
     }
 
-    if let Some(path) = get_shortest_path(&graph, ROOT_INDEX, TIME_CODE_NODE) {
+    if let Some(path) = get_shortest_path(&graph, PANIC_DASH_NODE, TIME_CODE_NODE) {
         print_path(TIME_CODE_NODE, &path);
     } else {
         println!("No path found.");
     }
 
-    if let Some(path) = get_shortest_path(&graph, ROOT_INDEX, INSTABOSS_NODE) {
+    if let Some(path) = get_shortest_path(&graph, TIME_CODE_NODE, INSTABOSS_NODE) {
         print_path(INSTABOSS_NODE, &path);
     } else {
         println!("No path found.");
     }
 
-    if let Some(path) = get_shortest_path(&graph, ROOT_INDEX, INSTAWIN_NODE) {
+    if let Some(path) = get_shortest_path(&graph, INSTABOSS_NODE, INSTAWIN_NODE) {
         print_path(INSTAWIN_NODE, &path);
+    } else {
+        println!("No path found.");
+    }
+
+    const SOME_RANDOM_INDEX: i32 = -3683;
+    if let Some(path) = get_shortest_path(&graph, ROOT_INDEX, SOME_RANDOM_INDEX) {
+        print_path(SOME_RANDOM_INDEX, &path);
     } else {
         println!("No path found.");
     }

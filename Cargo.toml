@@ -6,4 +6,4 @@ edition = "2018"
 
 [dependencies]
 petgraph = "0.4.13"
-bitflags = "1.0.4"
+bitflags = "1.1.0"
