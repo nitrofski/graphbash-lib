@@ -1,11 +1,14 @@
-#[macro_use]
-extern crate bitflags;
+#[macro_use] extern crate bitflags;
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::io;
 use std::iter::Iterator;
 
 use petgraph::graphmap;
+use petgraph::visit::EdgeRef;
+
+mod algo;
 
 mod utils;
 use utils::ItWithFallback;
@@ -196,65 +199,117 @@ pub fn generate(
     Ok(graph)
 }
 
-pub fn get_shortest_path(
+fn edge_cost((_, to, w): (i32, i32, &Directions)) -> f32 {
+    if to == -896
+        || to == -945
+        || to == -979
+        || to == -1014
+        || to == -1018
+        || to == -1025
+        || to == -1039
+        || to == -1064
+        || to == -1207
+        || to == -1313
+        || to == -1314
+        || to == -1317
+        || to == -1347
+        || to == -1353
+        || to == -1373
+        || to == -1375
+        || to == -1381
+        || to == -1383
+        || to == -1388
+        || to == -1397
+        || to == -1400
+        || to == -1409
+        || to == -1420
+        || to == -1424
+        || to == -1664
+        || to == -1954
+        || to == -2205
+        || to == -2271
+        || to == -2275
+        || to == -2277
+        || to == -2280
+        || to == -2282
+    {
+        return f32::INFINITY;
+    }
+
+    // Because diagonals are risky to input RTA in game, we'll give them a bigger cost.
+    // Also, because other directioans are impossible RTA, they have infinite weight.
+    // This should probably be configurable.
+    if w.has_straight() {
+        1.0
+    } else if w.has_diagonal() {
+        5.5
+    } else {
+        15.5
+    }
+}
+
+pub fn get_shortest_code(
     graph: &graphmap::DiGraphMap<i32, Directions>,
     from_node: i32,
-    to_node: i32,
-) -> Option<Vec<Directions>> {
-    let mut counter = 0;
-    let (_, path) = petgraph::algo::astar(
-        &graph,
-        /*start:*/ from_node,
-        /*is_goal:*/
-        |i| {
-            counter += 1;
-            i == to_node
-        },
-        /*edge_cost:*/
-        |e| {
-            if e.1 == -1025
-                || e.1 == -1317
-                || e.1 == -1353
-                || e.1 == -1381
-                || e.1 == -1383
-                || e.1 == -1400
-                || e.1 == -1409
-                || e.1 == -1424
-            {
-                return std::f32::INFINITY;
-            }
+    goal_nodes: &[i32],
+) -> Option<(Vec<(i32, Vec<Directions>)>, f32)> {
+    let shortest_path_descriptions: HashMap<_, _> =
+        std::iter::once((from_node, goal_nodes.iter().cloned().collect::<Vec<_>>()))
+            .chain(goal_nodes.iter().map(|&from| {
+                let to = goal_nodes
+                    .iter()
+                    .filter(|&to| *to != from)
+                    .cloned()
+                    .collect::<Vec<_>>();
+                (from, to)
+            }))
+            .flat_map(|(from, goals)| {
+                algo::dijkstra(&graph, from, goals, edge_cost)
+                    .into_iter()
+                    .filter_map(move |(to, opt)| {
+                        opt.and_then(|(cost, path)| Some(((from, to), (cost, path))))
+                    })
+            })
+            .collect();
 
-            // Because diagonals are risky to input RTA in game, we'll give them a bigger cost.
-            // Also, because other directioans are impossible RTA, they have infinite weight.
-            // This should probably be configurable.
-            if e.2.has_straight() {
-                1.0
-            } else if e.2.has_diagonal() {
-                1.1
+    // shortest_path_descriptions
+    //     .iter()
+    //     .for_each(|desc| println!("{:?}", desc));
+
+    // we build a goal graph, where nodes are the goals and
+    // edge weights are total path cost in source graph
+    let goal_graph = graphmap::DiGraphMap::<i32, f32>::from_edges(
+        shortest_path_descriptions
+            .iter()
+            .map(|(&(from, to), (w, _))| (from, to, w)),
+    );
+
+    return algo::shortest_hamiltonian_path(&goal_graph, from_node, |e| *e.weight()).and_then(
+        |(shortest_goal_path, total_cost)| {
+            if total_cost.is_infinite() {
+                None
             } else {
-                1.2
+                Some((
+                    shortest_goal_path
+                        .iter()
+                        .zip(shortest_goal_path.iter().skip(1))
+                        .map(|(&from_goal, &to_goal)| {
+                            let (_, sub_path) = shortest_path_descriptions
+                                .get(&(from_goal, to_goal))
+                                .unwrap();
+                            (
+                                to_goal,
+                                sub_path
+                                    .iter()
+                                    .zip(sub_path.iter().skip(1))
+                                    .map(|(&from, &to)| *graph.edge_weight(from, to).unwrap())
+                                    .collect(),
+                            )
+                        })
+                        .collect(),
+                    total_cost,
+                ))
             }
         },
-        /*estimate_cost:*/
-        |i| {
-            // Every straight direction can move at most 128 units toward the desired index. We
-            // can use that as a heuristic, as that gives us a mean to quickly calculate the minimum
-            // number of steps to get to the desired index.
-            // Note: Because of how diagonal composition works, this is only valid if a diagonal
-            //       input is set to cost at least twice as much as a straight input. Otherwise,
-            //       this estimate should be halved (e.g. for TAS). An underestimate won't affect
-            //       the result, only the performance.
-            let estimate = (to_node - i).abs() / 128 + 1;
-            estimate as f32 / 4.0
-        },
-    )?;
-
-    println!("Visited {} nodes before done.", counter);
-
-    Some(
-        path.iter()
-            .zip(path.iter().skip(1))
-            .map(|p| *graph.edge_weight(*p.0, *p.1).unwrap())
-            .collect(),
-    )
+    );
 }

@@ -2,7 +2,7 @@
 Graph based tool for Crash Bash MM exploration
 
 Since the PSX Main RAM covers only all of `0x80XXXXXX`, the first 2 digits will often times be
-ommited when refering to addresses.
+omited when refering to addresses.
 
 Notable values:
 - Index of A: `0`
@@ -115,10 +115,44 @@ of Bash's Memory Manipulation possibilities.
 
 # Known effects
 
-| Index | Address    | Good/Bad | Effect                                                                 | Notes                                     |
-| ----- | ---------- | -------- | ---------------------------------------------------------------------- | ----------------------------------------- |
-| -63   | `0x0BB270` |          | Name selection screen crashes on load.                                 | Temporary &mdash; Recovers on hub reload. |
-| -72   | `0x0BAC94` | Bad      | Navigating Left in name seletion screen stops functioning as expected. | Temporary &mdash; Recovers on hub reload. |
+| Index | Address    | Good/Bad     | Effect                                                                                                                    | Notes                                                     |
+| ----- | ---------- | ------------ | ------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------- |
+| -63   | `0x0BB270` |              | Name selection screen crashes on load.                                                                                    | Temporary &mdash; Recovers on hub reload.                 |
+| -72   | `0x0BAC94` | Bad          | Navigating Left in name selection screen stops functioning as expected.                                                   | Temporary &mdash; Recovers on hub reload.                 |
+| -945  |            | Visual (bad) | Camera in some games is left unmoving at the origin.                                                                      | Not playable RTA. Not enjoyable for TAS.                  |
+| -974  |            | Visual       | Rules dialog boxes and collectible selection boxes are not visible.                                                       |                                                           |
+| -979  |            | Bad          | Opening the Pause menu or displaying a Rules box crashes.                                                                 |                                                           |
+| -989  |            | Visual       | Warp room skybox spins at warp speed.                                                                                     | Pun intended.                                             |
+| -1014 |            | Bad          | Loads fail to start (softlock).                                                                                           |                                                           |
+| -1018 |            | Bad          | Loads crash at the end.                                                                                                   |                                                           |
+| -1039 |            | Bad          | Loads fail to start (crash/softlock).                                                                                     |                                                           |
+| -1064 |            | Bad          | Crashes on exiting name selection screen.                                                                                 |                                                           |
+| -1100 |            | Visual       | Collectibles in save selection screen overlap each other.                                                                 |                                                           |
+| -1207 |            | Bad          | Crashes during Panic rounds.                                                                                              |                                                           |
+| -1313 |            | Bad          | Crashes during Bash rounds.                                                                                               |                                                           |
+| -1314 |            | Bad          | Crashes at the start of a Bash round.                                                                                     |                                                           |
+| -1347 |            | Bad          | Causes Fox challenges to fail playing out, with a locked camera.                                                          | Crashes if stopping on that index.                        |
+| -1348 |            | Bad          | Crashes on exiting save selection screen.                                                                                 |                                                           |
+| -1373 |            | Bad          | Crashes on exiting name selection screen.                                                                                 |                                                           |
+| -1375 |            | Bad          | Crashes on exiting name selection screen.                                                                                 |                                                           |
+| -1388 |            | Bad          | Crash during Melt Panic rounds and in Metal Fox player death.                                                             | Could be more levels, but those are the observed effects. |
+| -1397 |            | Bad          | Crashes at the start of any (?) round.                                                                                    |                                                           |
+| -1420 |            | Bad          | Crashes on exiting name selection screen.                                                                                 |                                                           |
+| -1482 |            | Visual       | Pause menu gets visually corrupted.                                                                                       |                                                           |
+| -1511 |            | Bad          | Cannot proceed out of Rules box (X does nothing).                                                                         |                                                           |
+| -1664 |            | Bad          | Crashes on exiting save selection screen.                                                                                 |                                                           |
+| -1954 |            | Bad          | Crashes on the spot.                                                                                 |                                                           |
+| -2024 |            | Neutral      | Melt panic platform upper section behaves as if it was mostly melted. Toxic Dash often crashes some time into the rounds. | TAS may be able to avoid the Toxic Dash crashs.           |
+| -2205 |            | Bad          | Freezes the name selection screen almost completely.                                                                      | Temporary &mdash; Recovers upon exiting screen.           |
+| -2255 |            | Bad          | Freezes the name selection screen almost completely.                                                                      | Temporary &mdash; Recovers upon exiting screen.           |
+| -2271 |            | Bad          | Freezes the name selection screen almost completely.                                                                      | Temporary &mdash; Recovers upon exiting screen.           |
+| -2275 |            | Bad          | Freezes the name selection screen almost completely.                                                                      | Temporary &mdash; Recovers upon exiting screen.           |
+| -2277 |            | Bad          | Freezes the name selection screen almost completely.                                                                      | Temporary &mdash; Recovers upon exiting screen.           |
+| -2280 |            | Bad          | Freezes the name selection screen almost completely.                                                                      | Temporary &mdash; Recovers upon exiting screen.           |
+| -2282 |            | Bad          | Freezes the name selection screen almost completely.                                                                      | Temporary &mdash; Recovers upon exiting screen.           |
+
+-1615, Timer: Starts at different times depending on level
+
 
 
 # Log from 2016/07/26 (<http://pastebin.com/kewAgjvH>)
@@ -146,16 +180,16 @@ directly modifying the game code after all...)
 
 By observing the RAM throughout the Panic Dash code, I managed to find a small change in the index,
 and map it to 2 addresses. There should therefore be a change of 3 "units" between addresses
-`0B83E4` and `0B85DC`, which gives us 504 bytes or 168 bytes per "unit". In this case, this size also
-corresponds to the size of the letter/action objects in memory. I confirmed this by comparing the
-change in modified addresses and the change in index to multiple steps in the code, and it
+`0B83E4` and `0B85DC`, which gives us 504 bytes or 168 bytes per "unit". In this case, this size
+also corresponds to the size of the letter/action objects in memory. I confirmed this by comparing
+the change in modified addresses and the change in index to multiple steps in the code, and it
 corresponds perfectly.
 
 So what now? Well, knowing this, we can theorize that ANY 4-byte in memory that has a 168-byte
-integral offset from address `0x000004` can be changed to 2, and then to 0. What's beautiful with this
-is that 0 is a magic value in computers. It represents "nothing" and if, say, the value modified was
-a pointer to a function, then the whole sequence of operations executed by that function will be
-skipped.
+integral offset from address `0x000004` can be changed to 2, and then to 0. What's beautiful with
+this is that 0 is a magic value in computers. It represents "nothing" and if, say, the value
+modified was a pointer to a function, then the whole sequence of operations executed by that
+function will be skipped.
 
 Now, I have not investigated what the changed values represent, and still do not understand how some
 of these changes can cause confusing things like enable Instawin, or (this strangest effect if you

@@ -7,7 +7,7 @@ pub struct OrElse<It1, It2> {
 pub fn or<It1, It2>(primary: It1, fallback: It2) -> OrElse<It1, It2> {
     OrElse {
         primary,
-        fallback: fallback,
+        fallback,
         primary_consumed: false,
     }
 }
